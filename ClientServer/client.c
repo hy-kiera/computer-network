@@ -10,6 +10,7 @@
 #include <netdb.h>      // define structures like hostent
 #include <stdlib.h>
 #include <strings.h>
+#include <errno.h>
 
 void error(char *msg)
 {
@@ -26,14 +27,14 @@ int main(int argc, char *argv[])
 
     char buffer[256];
     if (argc < 3) {
-       fprintf(stderr,"usage %s hostname port\n", argv[0]);
-       exit(0);
+        fprintf(stderr,"usage %s hostname port\n", argv[0]);
+        exit(0);
     }
     
     portno = atoi(argv[2]);
     sockfd = socket(AF_INET, SOCK_STREAM, 0); //create a new socket
     if (sockfd < 0) 
-        error("ERROR opening socket");
+        perror("ERROR on opening socket");
     
     server = gethostbyname(argv[1]); //takes a string like "www.yahoo.com", and returns a struct hostent which contains information, as IP address, address type, the length of the addresses...
     if (server == NULL) {
@@ -41,13 +42,13 @@ int main(int argc, char *argv[])
         exit(0);
     }
     
-    bzero((char *) &serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET; //initialize server's address
+    bzero((char *) &serv_addr, sizeof(serv_addr)); //initialize server's address
+    serv_addr.sin_family = AF_INET;
     bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
     serv_addr.sin_port = htons(portno);
     
     if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) //establish a connection to the server
-        error("ERROR connecting");
+        perror("ERROR connecting");
     
     printf("Please enter the message: ");
     bzero(buffer,256);
@@ -55,12 +56,12 @@ int main(int argc, char *argv[])
     
     n = write(sockfd,buffer,strlen(buffer)); //write to the socket
     if (n < 0) 
-         error("ERROR writing to socket");
+        perror("ERROR writing to socket");
     
     bzero(buffer,256);
     n = read(sockfd,buffer,255); //read from the socket
     if (n < 0) 
-         error("ERROR reading from socket");
+        perror("ERROR reading from socket");
     printf("%s\n",buffer);
     
     close(sockfd); //close socket
