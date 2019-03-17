@@ -81,16 +81,18 @@ int main(int argc, char *argv[])
     newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
     if (newsockfd < 0)
         perror("ERROR on accept");
-    fprintf("server : got connection from %s\n", inet_ntoa(cli_addr.sin_addr));
+    printf("server : got connection.\n");
     
-    bzero(buffer, 256); //fills list buffer with 256 zeros.
-    n = read(newsockfd,buffer,255); //Read is a block function. It will read at most 255 bytes
-    if (n < 0) perror("ERROR reading from socket");
-    printf("Here is the message: %s\n",buffer);
-    
-    n = write(newsockfd,"I got your message",18); //NOTE: write function returns the number of bytes actually sent out �> this might be less than the number you told it to send
-    if (n < 0) perror("ERROR writing to socket");
-    
+    while(1) {
+        bzero(buffer, 256); //fills list buffer with 256 zeros.
+        n = read(newsockfd,buffer,255); //Read is a block function. It will read at most 255 bytes
+        if (n < 0) perror("ERROR reading from socket");
+        printf("Here is the message: %s\n",buffer);
+        
+        n = write(newsockfd,"I got your message",18); //NOTE: write function returns the number of bytes actually sent out �> this might be less than the number you told it to send
+        if (n < 0) perror("ERROR writing to socket");
+    }
+
     close(sockfd);
     close(newsockfd);
     

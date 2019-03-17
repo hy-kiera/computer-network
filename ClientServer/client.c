@@ -49,21 +49,23 @@ int main(int argc, char *argv[])
     
     if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) //establish a connection to the server
         perror("ERROR connecting");
-    
-    printf("Please enter the message: ");
-    bzero(buffer,256);
-    fgets(buffer,255,stdin);
-    
-    n = write(sockfd,buffer,strlen(buffer)); //write to the socket
-    if (n < 0) 
-        perror("ERROR writing to socket");
-    
-    bzero(buffer,256);
-    n = read(sockfd,buffer,255); //read from the socket
-    if (n < 0) 
-        perror("ERROR reading from socket");
-    printf("%s\n",buffer);
-    
+
+    while(1) {
+        printf("Please enter the message: ");
+        bzero(buffer,256);
+        fgets(buffer,255,stdin);
+        
+        n = write(sockfd,buffer,strlen(buffer)); //write to the socket
+        if (n < 0) 
+            perror("ERROR writing to socket");
+        
+        bzero(buffer,256);
+        n = read(sockfd,buffer,255); //read from the socket
+        if (n < 0) 
+            perror("ERROR reading from socket");
+        printf("%s\n",buffer);
+    }
+
     close(sockfd); //close socket
     
     return 0;
