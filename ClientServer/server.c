@@ -5,12 +5,14 @@
 #include <stdio.h>
 #include <sys/types.h>   // definitions of a number of data types used in socket.h and netinet/in.h
 #include <sys/socket.h>  // definitions of structures needed for sockets, e.g. sockaddr
+#include <sys/stat.h>
 #include <netinet/in.h>  // constants and structures needed for internet domain addresses, e.g. sockaddr_in
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <fcntl.h>
 
 #ifdef __linux
     char* os = "Linux";
@@ -21,8 +23,9 @@
 void error(char *msg);
 char* weekday(int wday);
 char* month(int mon);
-int file_size(FILE* fp);
+int file_size(int fp);
 char* content_type(char* c_type);
+char* write_http_response_msg(char* c_type, char* http_version, char* status_code, char* os, int filesize);
 
 void error(char *msg)
 {
@@ -46,6 +49,17 @@ int main(int argc, char *argv[])
     * Most system calls returns negative integers, so we'll check whether the return value is negative or not.
     */
     int n;
+
+    char* splited_str[256]; // store http request message
+    char delimit[] = " \r\n"; // delimiter of strtok
+    char* method, * req_file, * http_version;
+    char* c_type; // content-type
+    char file_path[128] = "./rsc"; // resources directory
+    int fp;
+    char * f_buff;
+    int i = 0, filesize;
+    char* status_code; // 200 OK
+    char* response; // http response message
 
     if (argc < 2) {
         /* If statement to check if user has provided valid port number by checking argument count */
@@ -87,32 +101,22 @@ int main(int argc, char *argv[])
     perror("ERROR on listen");
     // listen(sock_fd, BACKLOG); /* starts listening from client. */
 
-    clilen = sizeof(cli_addr);
-    /* accept function:
-    1) Block until a new connection is established
-    2) the new socket descriptor will be used for subsequent communication with the newly connected client.
-    */
-    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-    if (newsockfd < 0)
-        error("ERROR on accept");
-    printf("server : got connection.\n");
-    
-    // repeat read and write
-    while(1) {
+    while(1){
+        clilen = sizeof(cli_addr);
+        /* accept function:
+        1) Block until a new connection is established
+        2) the new socket descriptor will be used for subsequent communication with the newly connected client.
+        */
+        newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+        if (newsockfd < 0)
+            error("ERROR on accept");
+        printf("server : got connection.\n");
+
         bzero(buffer, 256); // fills list buffer with 256 zeros.
         n = read(newsockfd, buffer, 255); // Read is a block function. It will read at most 255 bytes
         if (n < 0) error("ERROR reading from socket");
-        printf("Here is the message:\n%s\n", buffer);
-        
-        char* splited_str[10]; // store http request message
-        char delimit[] = " \r\n"; // delimiter of strtok
-        char* method, * req_file, * http_version;
-        char* c_type; // content-type
-        char file_path[128] = "./rsc";
-        FILE* fp = NULL;
-        char * f_buff;
-        int i = 0, filesize;
-        
+        printf("%s\n\n", buffer);
+
         splited_str[i] = strtok(buffer, delimit); // split string into token(space)
         while(splited_str[i] != NULL) {
             i++;
@@ -120,46 +124,43 @@ int main(int argc, char *argv[])
         }
 
         method = splited_str[0]; // GET
-        c_type = req_file = splited_str[1]; // index.html
+        c_type = req_file = splited_str[1]; // /index.html
         strcat(file_path, req_file); // ./rsc/index.html
         http_version = splited_str[2]; // HTTP/1.1
 
+        status_code = "200 OK";
+
+        // bzero(response, 2048);
         // open requested file and check whether the file exists
-        if(!(fp = fopen("rsc/index.html", "rb"))) {
+        if(((fp = open(file_path, O_RDONLY)) == -1)) {
             // if the requested html file is not existed,
             // return 404 not found page
-            fp = fopen("./rsc/404.html", "rb");
-            fread(f_buff, 1, filesize, fp); // store fp in f_buff
-            write(newsockfd, f_buff, file_size(fp));
-            error("file not found\n");
+            close(fp);
+            fp = open("./rsc/404.html", O_RDONLY);
+            f_buff = malloc(file_size(fp));
+            filesize = file_size(fp);
+            read(fp, f_buff, filesize);
+
+            response = write_http_response_msg(c_type, http_version, status_code, os, filesize); // write http response message
+
+            if(write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket");
+            if(write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket");
+            close(fp);
+            error("404 file not found\n");
         }
 
         f_buff = malloc(file_size(fp));
         filesize = file_size(fp);
+        read(fp, f_buff, filesize);
 
-        fread(f_buff, 1, filesize, fp);
-        // read(fp, f_buff, file_size(fp));
-        
-        char* response; // http response message
-        int rsp_size;
-        char* status_code = "200 OK";
-        /* for take current date and time */
-        time_t t = time(NULL);
-        struct tm tm = *localtime(&t);
-
-        rsp_size = sprintf(response, "%s %s\r\n", http_version, status_code); // HTTP/1.1
-        rsp_size += sprintf(response + rsp_size, "Date: %s, %d %s %d %d:%d:%d GMT\r\n", weekday(tm.tm_wday), tm.tm_mday, month(tm.tm_mon), tm.tm_year, tm.tm_hour, tm.tm_min, tm.tm_sec);
-        rsp_size += sprintf(response + rsp_size, "Server: myServer/1.0 (%s)\r\n", os); // Linux
-        rsp_size += sprintf(response + rsp_size, "Content-Length: %d\r\n", filesize);
-        rsp_size += sprintf(response + rsp_size, "Connection: Keep-Alive\r\nContent-Type: %s", content_type(c_type)); // text/html
+        response = write_http_response_msg(c_type, http_version, status_code, os, filesize); // write http response message
 
         if(write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket");
         if(write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket");
-        // n = write(newsockfd,"I got your message",18); //NOTE: write function returns the number of bytes actually sent out �> this might be less than the number you told it to send
-        // if (n < 0) error("ERROR writing to socket");
 
+        free(response);
         free(f_buff);
-        fclose(fp);
+        close(fp);
     }
 
     close(sockfd);
@@ -181,25 +182,42 @@ char* month(int mon){
 }
 
 // return file size
-int file_size(FILE* fp){
-    int filesize;
-    fseek(fp, 0, SEEK_END); // move cursor(fiel pointer) to the end of file
-    filesize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+int file_size(int fp){
+    int filesize = lseek(fp, 0, SEEK_END); // move cursor(fiel pointer) to the end of file
+    lseek(fp, 0, SEEK_SET);
     return filesize; // current position of the cursor(file pointer)
-} // ERROR HERE
+}
 
 // return content type of the requested file
 char* content_type(char* c_type){
-    char* tmp = strtok(c_type, ".");
-    tmp = strtok(NULL, NULL); // html
-    strcat(".", tmp);
-    if(!strcmp(tmp, ".html")) return "text/html";
-    if(!strcmp(tmp, ".png")) return "image/png";
-    if(!strcmp(tmp, ".gif")) return "image/gif";
-    if(!strcmp(tmp, ".jpeg")) return "image/jpeg";
-    if(!strcmp(tmp, ".pdf")) return "application/pdf";
-    if(!strcmp(tmp, ".mp3")) return "audio/mpeg3";
+    char* tmp = strtok(c_type, "."); // /index.html
+    tmp = strtok(NULL, "\0"); // html
+    char file_type[10] = ".";
+    strcat(file_type, tmp);
+    if(!strcmp(file_type, ".html")) return "text/html";
+    if(!strcmp(file_type, ".png")) return "image/png";
+    if(!strcmp(file_type, ".gif")) return "image/gif";
+    if(!strcmp(file_type, ".jpeg")) return "image/jpeg";
+    if(!strcmp(file_type, ".pdf")) return "application/pdf";
+    if(!strcmp(file_type, ".mp3")) return "audio/mpeg3";
     else return "text/plain";
     return NULL;
+}
+
+char* write_http_response_msg(char* c_type, char* http_version, char* status_code, char* os, int filesize){
+    /* for take current date and time */
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    char* response = (char*) malloc(2048); // http response message
+    char * temp = content_type(c_type); // get content-type
+    int rsp_size;
+
+    bzero(response, 2048);
+    rsp_size = sprintf(response, "%s %s\r\n", http_version, status_code); // HTTP/1.1
+    rsp_size += sprintf(response + rsp_size, "Date: %s, %d %s %d %d:%d:%d GMT\r\n", weekday(tm.tm_wday), tm.tm_mday, month(tm.tm_mon), tm.tm_year, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    rsp_size += sprintf(response + rsp_size, "Server: myServer/1.0 (%s)\r\n", os); // Linux
+    rsp_size += sprintf(response + rsp_size, "Content-Length: %d\r\n", filesize);
+    rsp_size += sprintf(response + rsp_size, "Connection: Keep-Alive\r\nContent-Type: %s\n\n", temp); // text/html
+
+    return response;
 }
