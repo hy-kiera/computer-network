@@ -23,7 +23,7 @@
 void error(char *msg);
 char* weekday(int wday);
 char* month(int mon);
-int file_size(int fp);
+int file_size(int fb);
 char* content_type(char* c_type);
 char* write_http_response_msg(char* c_type, char* http_version, char* status_code, char* os, int filesize);
 
@@ -54,8 +54,8 @@ int main(int argc, char *argv[])
     char delimit[] = " \r\n"; // delimiter of strtok
     char* method, * req_file, * http_version;
     char* c_type; // content-type
-    char file_path[128] = "./rsc"; // resources directory
-    int fp;
+    char file_path[256] = "./rsc"; // resources directory
+    int fb, fb_404;
     char * f_buff;
     int i = 0, filesize;
     char* status_code; // 200 OK
@@ -101,14 +101,15 @@ int main(int argc, char *argv[])
     perror("ERROR on listen");
     // listen(sock_fd, BACKLOG); /* starts listening from client. */
 
-    while(1){
+    while (1){
         clilen = sizeof(cli_addr);
         /* accept function:
         1) Block until a new connection is established
         2) the new socket descriptor will be used for subsequent communication with the newly connected client.
         */
         newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-        if (newsockfd < 0)
+        
+		if (newsockfd < 0)
             error("ERROR on accept");
         printf("server : got connection.\n");
 
@@ -118,49 +119,54 @@ int main(int argc, char *argv[])
         printf("%s\n\n", buffer);
 
         splited_str[i] = strtok(buffer, delimit); // split string into token(space)
-        while(splited_str[i] != NULL) {
+        while (splited_str[i] != NULL) {
             i++;
             splited_str[i] = strtok(NULL, delimit); // start to split at the point where cursor stopped
         }
 
         method = splited_str[0]; // GET
-        c_type = req_file = splited_str[1]; // /index.html
+        req_file = splited_str[1]; // /index.html
         strcat(file_path, req_file); // ./rsc/index.html
         http_version = splited_str[2]; // HTTP/1.1
 
-        status_code = "200 OK";
-
-        // bzero(response, 2048);
         // open requested file and check whether the file exists
-        if(((fp = open(file_path, O_RDONLY)) == -1)) {
+        if (((fb = open(file_path, O_RDONLY)) == -1)) {
             // if the requested html file is not existed,
             // return 404 not found page
-            close(fp);
-            fp = open("./rsc/404.html", O_RDONLY);
-            f_buff = malloc(file_size(fp));
-            filesize = file_size(fp);
-            read(fp, f_buff, filesize);
+            close(fb);
+            // fb_404 = open("./rsc/404.html", O_RDONLY);
+            // f_buff = malloc(file_size(fb));
+            // filesize = file_size(fb);
+            // read(fb, f_buff, filesize);
 
-            response = write_http_response_msg(c_type, http_version, status_code, os, filesize); // write http response message
+            status_code = "404 not found";
 
-            if(write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket");
-            if(write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket");
-            close(fp);
+            response = write_http_response_msg("/a.html", http_version, status_code, os, filesize); // write http response message
+
+            if (write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket");
+            // if (write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket");
+            
+			// free(f_buff);
+			// close(fb_404);
             error("404 file not found\n");
         }
 
-        f_buff = malloc(file_size(fp));
-        filesize = file_size(fp);
-        read(fp, f_buff, filesize);
+
+        status_code = "200 OK";
+        c_type = req_file;
+
+        f_buff = malloc(file_size(fb));
+        filesize = file_size(fb);
+        read(fb, f_buff, filesize);
 
         response = write_http_response_msg(c_type, http_version, status_code, os, filesize); // write http response message
 
-        if(write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket");
-        if(write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket");
+        if (write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket");
+        if (write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket");
 
         free(response);
         free(f_buff);
-        close(fp);
+        close(fb);
     }
 
     close(sockfd);
@@ -182,9 +188,9 @@ char* month(int mon){
 }
 
 // return file size
-int file_size(int fp){
-    int filesize = lseek(fp, 0, SEEK_END); // move cursor(fiel pointer) to the end of file
-    lseek(fp, 0, SEEK_SET);
+int file_size(int fb){
+    int filesize = lseek(fb, 0, SEEK_END); // move cursor(fiel pointer) to the end of file
+    lseek(fb, 0, SEEK_SET);
     return filesize; // current position of the cursor(file pointer)
 }
 
@@ -194,12 +200,12 @@ char* content_type(char* c_type){
     tmp = strtok(NULL, "\0"); // html
     char file_type[10] = ".";
     strcat(file_type, tmp);
-    if(!strcmp(file_type, ".html")) return "text/html";
-    if(!strcmp(file_type, ".png")) return "image/png";
-    if(!strcmp(file_type, ".gif")) return "image/gif";
-    if(!strcmp(file_type, ".jpeg")) return "image/jpeg";
-    if(!strcmp(file_type, ".pdf")) return "application/pdf";
-    if(!strcmp(file_type, ".mp3")) return "audio/mpeg3";
+    if (!strcmp(file_type, ".html")) return "text/html";
+    if (!strcmp(file_type, ".png")) return "image/png";
+    if (!strcmp(file_type, ".gif")) return "image/gif";
+    if (!strcmp(file_type, ".jpeg")) return "image/jpeg";
+    if (!strcmp(file_type, ".pdf")) return "application/pdf";
+    if (!strcmp(file_type, ".mp3")) return "audio/mpeg3";
     else return "text/plain";
     return NULL;
 }

@@ -26,15 +26,16 @@ int main(int argc, char *argv[])
     struct hostent *server; //contains tons of information, including the server's IP address
 
     char buffer[256];
+
     if (argc < 3) {
         fprintf(stderr,"usage %s hostname port\n", argv[0]);
-        exit(0);
+        exit(0); //nomally terminate
     }
     
-    portno = atoi(argv[2]);
-    sockfd = socket(AF_INET, SOCK_STREAM, 0); //create a new socket
+    portno = atoi(argv[2]); //convert string to integer
+    sockfd = socket(AF_INET, SOCK_STREAM, 0); //create a new socket (IPv4, TCP)
     if (sockfd < 0) 
-        perror("ERROR on opening socket");
+        error("ERROR on opening socket");
     
     server = gethostbyname(argv[1]); //takes a string like "www.yahoo.com", and returns a struct hostent which contains information, as IP address, address type, the length of the addresses...
     if (server == NULL) {
@@ -48,7 +49,7 @@ int main(int argc, char *argv[])
     serv_addr.sin_port = htons(portno);
     
     if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) //establish a connection to the server
-        perror("ERROR connecting");
+        error("ERROR connecting");
 
     while(1) {
         printf("Please enter the message: ");
@@ -57,12 +58,12 @@ int main(int argc, char *argv[])
         
         n = write(sockfd,buffer,strlen(buffer)); //write to the socket
         if (n < 0) 
-            perror("ERROR writing to socket");
+            error("ERROR writing to socket");
         
         bzero(buffer,256);
         n = read(sockfd,buffer,255); //read from the socket
         if (n < 0) 
-            perror("ERROR reading from socket");
+            error("ERROR reading from socket");
         printf("%s\n",buffer);
     }
 
