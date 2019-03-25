@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
     char file_path[256] = "./rsc"; // resources directory
     int fb, fb_404;
     char * f_buff;
-    int i = 0, filesize;
+    int i, filesize;
     char* status_code; // 200 OK
     char* response; // http response message
 
@@ -118,6 +118,8 @@ int main(int argc, char *argv[])
         if (n < 0) error("ERROR reading from socket");
         printf("%s\n\n", buffer);
 
+
+        i = 0;
         splited_str[i] = strtok(buffer, delimit); // split string into token(space)
         while (splited_str[i] != NULL) {
             i++;
@@ -129,48 +131,44 @@ int main(int argc, char *argv[])
         strcat(file_path, req_file); // ./rsc/index.html
         http_version = splited_str[2]; // HTTP/1.1
 
+        // printf("file path : %s, req_file : %s", file_path, req_file);
+        printf("method : %s, req_file : %s, file_path : %s, http_version : %s\n", method, req_file, file_path, http_version);
+
         // open requested file and check whether the file exists
         if (((fb = open(file_path, O_RDONLY)) == -1)) {
-            // if the requested html file is not existed,
-            // return 404 not found page
-            close(fb);
-            // fb_404 = open("./rsc/404.html", O_RDONLY);
-            // f_buff = malloc(file_size(fb));
-            // filesize = file_size(fb);
-            // read(fb, f_buff, filesize);
+            char cc_type[2048];
+            memset(cc_type, '\0', 2048);
+            strcpy(cc_type, "/a.html");
 
-            status_code = "404 not found";
-
-            response = write_http_response_msg("/a.html", http_version, status_code, os, filesize); // write http response message
+            response = write_http_response_msg(cc_type, http_version, "404 NOT FOUND", os, filesize); // write http response message
 
             if (write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket");
-            // if (write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket");
-            
-			// free(f_buff);
-			// close(fb_404);
+
             error("404 file not found\n");
         }
 
 
-        status_code = "200 OK";
-        c_type = req_file;
+        status_code = "200 OK"; // Standard response for successful HTTP requests
+        c_type = req_file; // content-type
 
         f_buff = malloc(file_size(fb));
         filesize = file_size(fb);
-        read(fb, f_buff, filesize);
+        read(fb, f_buff, filesize); // read requested file
 
         response = write_http_response_msg(c_type, http_version, status_code, os, filesize); // write http response message
 
-        if (write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket");
-        if (write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket");
+        if (write(newsockfd, response, strlen(response)) < 0) error("ERROR on writing to socket"); // http response message
+        if (write(newsockfd, f_buff, filesize) < 0) error("ERROR on writing to socket"); // requested file
 
+        bzero(file_path, 256);
+        strcpy(file_path, "./rsc"); // init file_path
         free(response);
         free(f_buff);
         close(fb);
+        close(newsockfd);
     }
 
     close(sockfd);
-    close(newsockfd);
     
     return 0; 
 }
@@ -206,6 +204,7 @@ char* content_type(char* c_type){
     if (!strcmp(file_type, ".jpeg")) return "image/jpeg";
     if (!strcmp(file_type, ".pdf")) return "application/pdf";
     if (!strcmp(file_type, ".mp3")) return "audio/mpeg3";
+    if (!strcmp(file_type, ".mov")) return "video/quicktime";
     else return "text/plain";
     return NULL;
 }
@@ -224,6 +223,8 @@ char* write_http_response_msg(char* c_type, char* http_version, char* status_cod
     rsp_size += sprintf(response + rsp_size, "Server: myServer/1.0 (%s)\r\n", os); // Linux
     rsp_size += sprintf(response + rsp_size, "Content-Length: %d\r\n", filesize);
     rsp_size += sprintf(response + rsp_size, "Connection: Keep-Alive\r\nContent-Type: %s\n\n", temp); // text/html
+
+    printf("HTTP Response MSG :\n%s\n", response);
 
     return response;
 }
